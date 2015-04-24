@@ -57,10 +57,12 @@ class wbJoomigate_controller extends JControllerBase {
     $this->init_datasets();
     $this->init_maps();
     $task_method = 'task_' . $this->input->getCmd('task');
-    if( !method_exists( $this, $task_method ) ){
-      $task_method = 'task_default';
+    $this->task_default();
+    if( method_exists( $this, $task_method ) ){
+      echo '<textarea style=width:100%;height:100%;min-height:640px;>';
+      $this->{ $task_method }();
+      echo '</textarea>';
     }
-    $this->{ $task_method }();
 
   }
 
@@ -211,6 +213,9 @@ class wbJoomigate_controller extends JControllerBase {
    */
   private function init_maps(){
 
+    // Defaults
+      $this->maps['category']['0'] = $this->input->getInt('uncategorized_catid', 2);
+
     // Component
       foreach( $this->data['component']['remote'] AS $remote_component ){
         foreach( $this->data['component']['local'] AS $local_component ){
@@ -303,7 +308,11 @@ class wbJoomigate_controller extends JControllerBase {
         foreach( $this->data['menu']['local'] AS $local_menu ){
           if(
             $local_menu->menutype == $remote_menu_type->menutype
-            && $local_menu->alias == $remote_menu->alias
+            && (
+              $local_menu->alias == $remote_menu->alias
+              ||
+              preg_replace('/\-\d+$/','',$local_menu->alias) == $remote_menu->alias
+              )
             && (
               ((int)$local_menu->parent_id == 1 && !(int)$remote_menu->parent)
               || ($local_menu->parent_id == $this->maps['menu'][ $remote_menu->parent ])
@@ -323,21 +332,27 @@ class wbJoomigate_controller extends JControllerBase {
    * @return [type] [description]
    */
   private function task_default(){
-    JHtml::_('behavior.core');
-    ?>
-    <form id="adminForm">
-      <input type="hidden" name="option" value="com_wbjoomigate">
-      <input type="hidden" name="task" value="">
-      <ul>
-        <li><a onclick="Joomla.submitbutton('import_content');">Import Content</a></li>
-        <li><a onclick="Joomla.submitbutton('import_menu');">Import Menu</a></li>
-      </ul>
-      <div class="field text">
-        <label for="uncategorized_catid">Uncategorized Catid</label>
-        <input type="text" name="uncategorized_catid" value="2">
-      </div>
-    </form>
-    <?php
+
+    // Media
+      JHtml::_('behavior.core');
+
+    // Title / Submenu
+      JToolBarHelper::title( JText::_( 'Joomla Migration Script' ), 'generic.png' );
+      JToolBarHelper::custom( 'import_content', 'cog.png', 'cog_f2.png', 'Import Content', false );
+      JToolBarHelper::custom( 'import_menu', 'cog.png', 'cog_f2.png', 'Import Menu', false );
+
+    // View
+      ?>
+      <form id="adminForm">
+        <input type="hidden" name="option" value="com_wbjoomigate">
+        <input type="hidden" name="task" value="">
+        <div class="field text">
+          <label for="uncategorized_catid">Uncategorized Catid</label>
+          <input type="text" name="uncategorized_catid" value="2">
+        </div>
+      </form>
+      <?php
+
   }
 
   /**
@@ -359,9 +374,10 @@ class wbJoomigate_controller extends JControllerBase {
             !$menu_type->check()
             || !$menu_type->store()
             ){
-            inspect( $menu_type->getErrors(), $remote_menu_type );
+            $this->inspect( $menu_type->getErrors(), $remote_menu_type );
+            return;
           }
-          inspect( 'create menu_type', $menu_type->menutype );
+          $this->inspect( 'create menu_type: ' . $menu_type->menutype );
           $this->maps['menu_type'][ $remote_menu_type->id ] = $menu_type->id;
         }
       }
@@ -370,6 +386,10 @@ class wbJoomigate_controller extends JControllerBase {
       foreach( $this->data['menu_type']['remote'] AS $remote_menu_type ){
         $this->_copy_remote_menu( 0, 0, $remote_menu_type );
       }
+
+    // Complete
+      $this->app->enqueueMessage('Import Complete');
+      // $this->app->redirect('index.php?option=com_wbjoomigate', 'Import Complete');
 
   }
 
@@ -450,10 +470,10 @@ class wbJoomigate_controller extends JControllerBase {
               || !$menu->rebuild()
               || !$menu->rebuildPath()
               ){
-              inspect( $menu->getErrors(), $remote_menu );
-              die();
+              $this->inspect( $menu->getErrors(), $remote_menu );
+              return;
             }
-            inspect( 'create menu', $menu->parent_id.'.'.$menu->alias );
+            $this->inspect( 'create menu', $menu->parent_id.'.'.$menu->alias );
             $this->maps['menu'][ $remote_menu->id ] = $menu->id;
         }
         $this->_copy_remote_menu( $level + 1, $remote_menu->id, $remote_menu_type );
@@ -466,9 +486,6 @@ class wbJoomigate_controller extends JControllerBase {
    * @return [type] [description]
    */
   private function task_import_content(){
-
-    // Defaults
-      $this->maps['category']['0'] = $this->input->getInt('uncategorized_catid', 2);
 
     // Port Remote Sections to Local Categories
       foreach( $this->data['section']['remote'] AS $remote_content_section ){
@@ -488,10 +505,10 @@ class wbJoomigate_controller extends JControllerBase {
             || !$category->rebuild()
             || !$category->rebuildPath()
             ){
-            inspect( $category->getErrors() );
-            die();
+            $this->inspect( $category->getErrors(), $remote_content_section );
+            return;
           }
-          inspect( 'create category', $category->path );
+          $this->inspect( 'create category', $category->path );
           $this->maps['section'][ $remote_content_section->id ] = $category->id;
         }
       }
@@ -519,10 +536,10 @@ class wbJoomigate_controller extends JControllerBase {
                 || !$category->rebuild()
                 || !$category->rebuildPath()
                 ){
-                inspect( $category->getErrors() );
-                die();
+                $this->inspect( $category->getErrors(), $remote_content_category );
+                return;
               }
-              inspect( 'create category', $category->path );
+              $this->inspect( 'create category',  $category->path );
               $this->maps['category'][ $remote_content_category->id ] = $category->id;
             }
             $this->_copy_remote_categories( 3, $remote_content_category->id );
@@ -542,16 +559,17 @@ class wbJoomigate_controller extends JControllerBase {
             !$article->check()
             || !$article->store()
             ){
-            inspect( $article->getErrors(), $article );
-            die();
+            $this->inspect( $article->getErrors(), $remote_content_article );
+            return;
           }
-          inspect( 'create article', $article->catid.'.'.$article->alias );
+          $this->inspect( 'create article', $article->catid.'.'.$article->alias );
           $this->maps['article'][ $remote_content_article->id ] = $article->id;
         }
       }
 
     // Complete
-      $this->app->redirect('index.php?option=com_wbjoomigate', 'Import Complete');
+      $this->app->enqueueMessage('Import Complete');
+      // $this->app->redirect('index.php?option=com_wbjoomigate', 'Import Complete');
 
   }
 
@@ -592,10 +610,10 @@ class wbJoomigate_controller extends JControllerBase {
               || !$category->rebuild()
               || !$category->rebuildPath()
               ){
-              inspect( $category->getErrors() );
-              die();
+              $this->inspect( $category->getErrors(), $remote_content_category );
+              return;
             }
-            inspect( 'create category', $category->path );
+            $this->inspect( 'create category', $category->path );
             $this->maps['category'][ $remote_content_category->id ] = $category->id;
           }
           $this->_copy_remote_categories( $level + 1, $remote_content_category->id );
@@ -603,6 +621,14 @@ class wbJoomigate_controller extends JControllerBase {
       }
     }
 
+  }
+
+  /**
+   * [inspect description]
+   * @return [type] [description]
+   */
+  private function inspect(){
+    echo print_r( func_get_args(), true );
   }
 
 }
