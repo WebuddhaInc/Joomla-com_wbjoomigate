@@ -44,6 +44,19 @@ class wbJoomigate_controller extends JControllerBase {
     'article' => array(
       'local' => array(),
       'remote' => array()
+      ),
+    'component' => array(
+      'local' => array(),
+      'remote' => array()
+      ),
+    'module_menu' => array(
+      'local' => array(),
+      'local_extension' => array(),
+      'remote' => array()
+      ),
+    'module' => array(
+      'local' => array(),
+      'remote' => array()
       )
     );
 
@@ -67,6 +80,35 @@ class wbJoomigate_controller extends JControllerBase {
   }
 
   /**
+   * [task_default description]
+   * @return [type] [description]
+   */
+  private function task_default(){
+
+    // Media
+      JHtml::_('behavior.core');
+
+    // Title / Submenu
+      JToolBarHelper::title( JText::_( 'Joomla Migration Script' ), 'generic.png' );
+      JToolBarHelper::custom( 'import_module', 'cog.png', 'cog_f2.png', 'Import Modules', false );
+      JToolBarHelper::custom( 'import_content', 'cog.png', 'cog_f2.png', 'Import Content', false );
+      JToolBarHelper::custom( 'import_menu', 'cog.png', 'cog_f2.png', 'Import Menu', false );
+
+    // View
+      ?>
+      <form id="adminForm">
+        <input type="hidden" name="option" value="com_wbjoomigate">
+        <input type="hidden" name="task" value="">
+        <div class="field text">
+          <label for="uncategorized_catid">Uncategorized Catid</label>
+          <input type="text" name="uncategorized_catid" value="2">
+        </div>
+      </form>
+      <?php
+
+  }
+
+  /**
    * [init_database description]
    * @return [type] [description]
    */
@@ -74,7 +116,7 @@ class wbJoomigate_controller extends JControllerBase {
 
     $this->local_db = JFactory::getDBO();
 
-    $option = array(); //prevent problems
+    $option             = array(); //prevent problems
     $option['driver']   = 'mysqli';             // Database driver name
     $option['host']     = 'localhost';          // Database host name
     $option['user']     = 'webuddha_j15v3';       // User for database authentication
@@ -205,6 +247,52 @@ class wbJoomigate_controller extends JControllerBase {
             ")
           ->loadObjectList();
 
+    // Module
+      $this->data['module']['local_extension']
+        = $this->local_db
+          ->setQuery("
+            SELECT *
+            FROM `#__extensions`
+            WHERE `type` = 'module'
+            ")
+          ->loadObjectList();
+
+    // Module
+      $this->data['module']['local']
+        = $this->local_db
+          ->setQuery("
+            SELECT *
+            FROM `#__modules`
+            ")
+          ->loadObjectList();
+
+    // Module
+      $this->data['module']['remote']
+        = $this->remote_db
+          ->setQuery("
+            SELECT *
+            FROM `#__modules`
+            ")
+          ->loadObjectList();
+
+    // Module Menu
+      $this->data['module_menu']['local']
+        = $this->local_db
+          ->setQuery("
+            SELECT *
+            FROM `#__modules_menu`
+            ")
+          ->loadObjectList();
+
+    // Module
+      $this->data['module_menu']['remote']
+        = $this->remote_db
+          ->setQuery("
+            SELECT *
+            FROM `#__modules_menu`
+            ")
+          ->loadObjectList();
+
   }
 
   /**
@@ -221,6 +309,20 @@ class wbJoomigate_controller extends JControllerBase {
         foreach( $this->data['component']['local'] AS $local_component ){
           if( $local_component->element == $remote_component->option ){
             $this->maps['component'][ $remote_component->id ] = $local_component->extension_id;
+            break;
+          }
+        }
+      }
+
+    // Module
+      foreach( $this->data['module']['remote'] AS $remote_module ){
+        foreach( $this->data['module']['local'] AS $local_module ){
+          if(
+            $local_module->position == $remote_module->position
+            && $local_module->module == $remote_module->module
+            && $local_module->ordering == $remote_module->ordering
+            ){
+            $this->maps['module'][ $remote_module->id ] = $local_module->id;
             break;
           }
         }
@@ -328,30 +430,84 @@ class wbJoomigate_controller extends JControllerBase {
   }
 
   /**
-   * [task_default description]
+   * [task_import_menu description]
    * @return [type] [description]
    */
-  private function task_default(){
+  private function task_import_module(){
 
-    // Media
-      JHtml::_('behavior.core');
+    // Translate Modules
+      foreach( $this->data['module']['remote'] AS $remote_module ){
+        if( empty($this->maps['module'][ $remote_module->id ]) ){
+          $mod_element = $remote_module->module;
+          switch( $mod_element ){
+            case 'mod_mainmenu':
+              $mod_element = 'mod_mainmenu';
+              break;
+          }
+          foreach( $this->data['module']['local_extension'] AS $local_module_extension ){
+            if( $local_module_extension->element == $mod_element ){
+              $module = new JTableModule( $this->local_db );
+              $module->bind( (array)$remote_module );
+              $module->id          = null;
+              $module->checked_out = 0;
+              if(
+                !$module->check()
+                || !$module->store()
+                ){
+                $this->inspect( $module->getErrors(), $remote_module );
+                return;
+              }
+              $this->inspect( 'create module: ' . $module->position.'.'.$module->module );
+              $this->maps['module'][ $remote_module->id ] = $module->id;
+              $this->data['module']['local'][] = $module->getProperties();
+            }
+          }
+        }
+      }
 
-    // Title / Submenu
-      JToolBarHelper::title( JText::_( 'Joomla Migration Script' ), 'generic.png' );
-      JToolBarHelper::custom( 'import_content', 'cog.png', 'cog_f2.png', 'Import Content', false );
-      JToolBarHelper::custom( 'import_menu', 'cog.png', 'cog_f2.png', 'Import Menu', false );
+    // Translate Modules Menu
+      foreach( $this->data['module']['remote'] AS $remote_module ){
+        if( isset($this->maps['module'][ $remote_module->id ]) ){
+          foreach( $this->data['module_menu']['remote'] AS $remote_module_menu ){
+            if(
+              isset($this->maps['menu'][ $remote_module_menu->menuid ])
+              &&  $remote_module->id == $remote_module_menu->moduleid
+              ){
+              $found = false;
+              foreach( $this->data['module_menu']['local'] AS $local_module_menu ){
+                if(
+                  $local_module_menu->moduleid == $this->maps['module'][ $remote_module_menu->moduleid ]
+                  && $local_module_menu->menuid == $this->maps['menu'][ $remote_module_menu->menuid ]
+                  ){
+                  $found = true;
+                  break;
+                }
+              }
+              if( !$found ){
+                $module_menu = array(
+                  'moduleid' => $this->maps['module'][ $remote_module_menu->moduleid ],
+                  'menuid'   => $this->maps['menu'][ $remote_module_menu->menuid ]
+                  );
+                $this->local_db
+                  ->setQuery(
+                    $this->local_db
+                    ->getQuery(true)
+                    ->insert( $this->local_db->quoteName('#__modules_menu') )
+                    ->columns( $this->local_db->quoteName(array_keys($module_menu)) )
+                    ->values( implode(',', array_values($module_menu)) )
+                    )
+                  ->query();
+                $this->inspect( 'create module_menu: ' . $module_menu['moduleid'] . '-' . $module_menu['menuid'] );
+                $this->data['module_menu']['local'][] = $module_menu;
+              }
+            }
+          }
+        }
+      }
 
-    // View
-      ?>
-      <form id="adminForm">
-        <input type="hidden" name="option" value="com_wbjoomigate">
-        <input type="hidden" name="task" value="">
-        <div class="field text">
-          <label for="uncategorized_catid">Uncategorized Catid</label>
-          <input type="text" name="uncategorized_catid" value="2">
-        </div>
-      </form>
-      <?php
+    // Complete
+      $this->app->enqueueMessage('Module Import Complete');
+      // $this->app->redirect('index.php?option=com_wbjoomigate', 'Import Complete');
 
   }
 
@@ -379,6 +535,7 @@ class wbJoomigate_controller extends JControllerBase {
           }
           $this->inspect( 'create menu_type: ' . $menu_type->menutype );
           $this->maps['menu_type'][ $remote_menu_type->id ] = $menu_type->id;
+          $this->data['menu_type']['local'][] = $menu_type->getProperties();
         }
       }
 
@@ -388,7 +545,7 @@ class wbJoomigate_controller extends JControllerBase {
       }
 
     // Complete
-      $this->app->enqueueMessage('Import Complete');
+      $this->app->enqueueMessage('Menu Import Complete');
       // $this->app->redirect('index.php?option=com_wbjoomigate', 'Import Complete');
 
   }
@@ -475,6 +632,7 @@ class wbJoomigate_controller extends JControllerBase {
             }
             $this->inspect( 'create menu', $menu->parent_id.'.'.$menu->alias );
             $this->maps['menu'][ $remote_menu->id ] = $menu->id;
+            $this->data['menu']['local'][] = $menu->getProperties();
         }
         $this->_copy_remote_menu( $level + 1, $remote_menu->id, $remote_menu_type );
       }
@@ -510,6 +668,7 @@ class wbJoomigate_controller extends JControllerBase {
           }
           $this->inspect( 'create category', $category->path );
           $this->maps['section'][ $remote_content_section->id ] = $category->id;
+          $this->data['section']['local'][] = $section->getProperties();
         }
       }
 
@@ -541,6 +700,7 @@ class wbJoomigate_controller extends JControllerBase {
               }
               $this->inspect( 'create category',  $category->path );
               $this->maps['category'][ $remote_content_category->id ] = $category->id;
+              $this->data['category']['local'][] = $category->getProperties();
             }
             $this->_copy_remote_categories( 3, $remote_content_category->id );
           }
@@ -564,11 +724,12 @@ class wbJoomigate_controller extends JControllerBase {
           }
           $this->inspect( 'create article', $article->catid.'.'.$article->alias );
           $this->maps['article'][ $remote_content_article->id ] = $article->id;
+          $this->data['article']['local'][] = $article->getProperties();
         }
       }
 
     // Complete
-      $this->app->enqueueMessage('Import Complete');
+      $this->app->enqueueMessage('Content Import Complete');
       // $this->app->redirect('index.php?option=com_wbjoomigate', 'Import Complete');
 
   }
@@ -615,6 +776,7 @@ class wbJoomigate_controller extends JControllerBase {
             }
             $this->inspect( 'create category', $category->path );
             $this->maps['category'][ $remote_content_category->id ] = $category->id;
+            $this->data['category']['local'][] = $category->getProperties();
           }
           $this->_copy_remote_categories( $level + 1, $remote_content_category->id );
         }
