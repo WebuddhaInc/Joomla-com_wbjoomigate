@@ -57,7 +57,8 @@
       <menu img="class:wbjoomigate-system" task="system">com_wbjoomigate-system</menu>
     </submenu>
     <files folder="admin">
-      <file>wbjoomigate.xml</file>
+      <file>wbjoomigate.php</file>
+      <file>controller.php</file>
     </files>
     <!-- Administrator Language
     <languages folder="admin">
