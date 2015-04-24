@@ -54,16 +54,6 @@ class wbJoomigate_controller extends JControllerBase {
   public function execute(){
 
     $this->init_database();
-
-    // Flush
-      $this->local_db->setQuery("
-        DELETE FROM `#__menu`
-        WHERE `id` > 105
-        ")
-        ->query();
-
-
-
     $this->init_datasets();
     $this->init_maps();
     $task_method = 'task_' . $this->input->getCmd('task');
