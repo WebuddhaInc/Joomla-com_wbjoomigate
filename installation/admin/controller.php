@@ -54,6 +54,16 @@ class wbJoomigate_controller extends JControllerBase {
   public function execute(){
 
     $this->init_database();
+
+    // Flush
+      $this->local_db->setQuery("
+        DELETE FROM `#__menu`
+        WHERE `id` > 105
+        ")
+        ->query();
+
+
+
     $this->init_datasets();
     $this->init_maps();
     $task_method = 'task_' . $this->input->getCmd('task');
@@ -182,6 +192,27 @@ class wbJoomigate_controller extends JControllerBase {
           ")
           ->loadObjectList();
 
+    // Component
+      $this->data['component']['local']
+        = $this->local_db
+          ->setQuery("
+            SELECT *
+            FROM `#__extensions`
+            WHERE `type` = 'component'
+            ")
+          ->loadObjectList();
+
+    // Component
+      $this->data['component']['remote']
+        = $this->remote_db
+          ->setQuery("
+            SELECT *
+            FROM `#__components`
+            WHERE `option` != ''
+              AND `parent` = 0
+            ")
+          ->loadObjectList();
+
   }
 
   /**
@@ -189,6 +220,16 @@ class wbJoomigate_controller extends JControllerBase {
    * @return [type] [description]
    */
   private function init_maps(){
+
+    // Component
+      foreach( $this->data['component']['remote'] AS $remote_component ){
+        foreach( $this->data['component']['local'] AS $local_component ){
+          if( $local_component->element == $remote_component->option ){
+            $this->maps['component'][ $remote_component->id ] = $local_component->extension_id;
+            break;
+          }
+        }
+      }
 
     // Menu Type
       foreach( $this->data['menu_type']['remote'] AS $remote_menu_type ){
@@ -253,8 +294,6 @@ class wbJoomigate_controller extends JControllerBase {
         }
       }
 
-      inspect( $this->maps );die('123');
-
   }
 
   /**
@@ -317,20 +356,15 @@ class wbJoomigate_controller extends JControllerBase {
    */
   private function task_import_menu(){
 
-    // Flush
-      $this->local_db->setQuery("
-        DELETE FROM `#__menu`
-        WHERE `id` > 105
-        ")
-        ->query();
-
     // Translate Menu Types
       foreach( $this->data['menu_type']['remote'] AS $remote_menu_type ){
         if( empty($this->maps['menu_type'][ $remote_menu_type->id ]) ){
           $menu_type = new JTableMenuType( $this->local_db );
-          $menu_type->menutype = $remote_menu_type->menutype;
-          $menu_type->title = $remote_menu_type->title;
-          $menu_type->description = $remote_menu_type->description;
+          $menu_type->bind( array(
+            'menutype'    => $remote_menu_type->menutype,
+            'title'       => $remote_menu_type->title,
+            'description' => $remote_menu_type->description
+            ));
           if(
             !$menu_type->check()
             || !$menu_type->store()
@@ -345,7 +379,6 @@ class wbJoomigate_controller extends JControllerBase {
     // Translate Menu Types
       foreach( $this->data['menu_type']['remote'] AS $remote_menu_type ){
         $this->_copy_remote_menu( 0, 0, $remote_menu_type );
-        die();
       }
 
   }
@@ -389,46 +422,37 @@ class wbJoomigate_controller extends JControllerBase {
           // Create
             $menu = new JTableMenu( $this->local_db );
             $menu->bind( (array)$remote_menu );
-            $menu->id        = null;
-            $menu->alias     = $alias;
-            $menu->level     = $remote_menu->sublevel;
-            $menu->title     = $remote_menu->name;
-            $menu->params    = json_encode( parse_ini_string($menu->params) );
-            $menu->parent_id = ((int)$remote_menu->parent ? $this->maps['menu'][ $remote_menu->parent ] : 0);
-            if( $remote_menu->component_option ){
-              if( !isset($this->map['component_object'][ $remote_menu->componentid ]) ){
-                $this->map['component_object'][ $remote_menu->componentid ]
-                  = $this->local_db
-                    ->setQuery("
-                      SELECT *
-                      FROM `#__extensions`
-                      WHERE `type` = 'component'
-                        AND `element` = '". $this->local_db->escape($remote_menu->component_option) ."'
-                      ")
-                    ->loadObject();
-              }
-              $menu->component_id
-                = isset($this->map['component_object'][ $remote_menu->componentid ])
-                ? $this->map['component_object'][ $remote_menu->componentid ]->id
-                : 0;
-            }
+            $menu->id           = null;
+            $menu->checked_out  = 0;
+            $menu->alias        = $alias;
+            $menu->level        = $remote_menu->sublevel;
+            $menu->title        = $remote_menu->name;
+            $menu->params       = json_encode( parse_ini_string($menu->params) );
+            $menu->parent_id    = ((int)$remote_menu->parent ? $this->maps['menu'][ $remote_menu->parent ] : 0);
+            $menu->home         = 0;
+            $menu->client_id    = 0;
+            $menu->language     = '*';
+            $menu->component_id = isset($this->maps['component'][ $remote_menu->componentid ])
+                                  ? $this->maps['component'][ $remote_menu->componentid ]
+                                  : 0;
             if( $menu->type == 'component' ){
               switch( $menu->type ){
                 case 'component':
-                  if( isset($this->map['component_object'][ $remote_menu->componentid ]) ){
-                    $link = parse_url( $menu->link );
-                    parse_str( $link['query'], $query );
-                    inspect( $link, $query, $menu, $remote_menu, $this->map );
-                    inspect( $this->map['component_object'][ $remote_menu->componentid ] );
-                    die();
-                    die();
+                  switch( $remote_menu->component_option ){
+                    case 'com_content':
+                      $link = parse_url( $menu->link );
+                      if( !empty($link) ){
+                        parse_str( $link['query'], $query );
+                        if( !empty($query) && !empty($query['id']) && isset($this->maps['article'][ $query['id'] ]) ){
+                          $query['id'] = $this->maps['article'][ $query['id'] ];
+                          }
+                        $menu->link = $link['path'] . '?' . http_build_query($query);
+                      }
+                      break;
                   }
                   break;
               }
             }
-            $menu->home      = 0;
-            $menu->client_id = 0;
-            $menu->language  = '*';
             $menu->setLocation($menu->parent_id, 'last-child');
             if(
               !$menu->check()
@@ -520,27 +544,10 @@ class wbJoomigate_controller extends JControllerBase {
       foreach( $this->data['article']['remote'] AS $remote_content_article ){
         if( empty($this->maps['article'][ $remote_content_article->id ]) ){
           $article = new JTableContent( $this->local_db );
-          $article->title            = $remote_content_article->title;
-          $article->alias            = $remote_content_article->alias;
-          $article->introtext        = $remote_content_article->introtext;
-          $article->fulltext         = $remote_content_article->fulltext;
-          $article->created          = $remote_content_article->created;
-          $article->created_by       = $remote_content_article->created_by;
-          $article->created_by_alias = $remote_content_article->created_by_alias;
-          $article->modified         = $remote_content_article->modified;
-          $article->modified_by      = $remote_content_article->modified_by;
-          $article->state            = $remote_content_article->state;
-          $article->publish_up       = $remote_content_article->publish_up;
-          $article->publish_down     = $remote_content_article->publish_down;
-          $article->images           = $remote_content_article->images;
-          $article->urls             = $remote_content_article->urls;
-          $article->checked_out      = $remote_content_article->checked_out;
-          $article->checked_out_time = $remote_content_article->checked_out_time;
-          $article->ordering         = $remote_content_article->ordering;
-          $article->metakey          = $remote_content_article->metakey;
-          $article->metadesc         = $remote_content_article->metadesc;
-          $article->hits             = $remote_content_article->hits;
-          $article->catid            = $this->maps['category'][ $remote_content_article->catid ];
+          $article->bind( (array)$remote_content_article );
+          $article->id          = null;
+          $article->checked_out = 0;
+          $article->catid       = $this->maps['category'][ $remote_content_article->catid ];
           if(
             !$article->check()
             || !$article->store()
