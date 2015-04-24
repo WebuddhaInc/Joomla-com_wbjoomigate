@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="component" version="3.1" method="upgrade">
+  <name>COM_WBJOOMIGATE</name>
+  <author>Holodyn Corporation | Webuddha</author>
+  <creationDate>2015</creationDate>
+  <copyright>(C) 2015 Holodyn Corporation. All rights reserved.
+  </copyright>
+  <license>GNU General Public License version 2 or later; see LICENSE.txt</license>
+  <authorEmail>wbjoomigate@webuddha.com</authorEmail>
+  <authorUrl>www.webuddha.com</authorUrl>
+  <version>1.0.0</version>
+  <description>COM_WBJOOMIGATE_XML_DESCRIPTION</description>
+
+  <!-- Database
+  <install>
+    <sql>
+      <file driver="mysql" charset="utf8">install/db/mysql/install_wbjoomigate.mysql.utf8.sql</file>
+    </sql>
+  </install>
+  <uninstall>
+    <sql>
+      <file driver="mysql" charset="utf8">install/db/mysql/uninstall_wbjoomigate.mysql.utf8.sql</file>
+    </sql>
+  </uninstall>
+  <update>
+    <schemas>
+      <schemapath type="mysql" charset="utf8">install/db/mysql/updates</schemapath>
+    </schemas>
+  </update>
+  -->
+
+  <!-- Client Files
+  <files folder="client">
+  </files>
+  <languages folder="client">
+    <language tag="en-GB">language/en-GB/en-GB.com_wbjoomigate.ini</language>
+    <language tag="en-GB">language/en-GB/en-GB.com_wbjoomigate.sys.ini</language>
+  </languages>
+   -->
+
+  <!-- Media
+  <media folder="media">
+    <folder>com_wbjoomigate</folder>
+  </media>
+   -->
+
+  <!-- Images
+  <images folder="images">
+    <folder>com_wbjoomigate</folder>
+  </images>
+   -->
+
+  <!-- Administration Files -->
+  <administration>
+    <menu img="class:wbjoomigate">com_wbjoomigate</menu>
+    <submenu>
+      <menu img="class:wbjoomigate-system" task="system">com_wbjoomigate-system</menu>
+    </submenu>
+    <files folder="admin">
+      <file>wbjoomigate.xml</file>
+    </files>
+    <!-- Administrator Language
+    <languages folder="admin">
+      <language tag="en-GB">language/en-GB/en-GB.com_wbjoomigate.ini</language>
+      <language tag="en-GB">language/en-GB/en-GB.com_wbjoomigate.sys.ini</language>
+    </languages>
+    -->
+  </administration>
+</extension>
