@@ -66,15 +66,13 @@ class wbJoomigate_controller extends JControllerBase {
    */
   public function execute(){
 
-    $this->init_database();
-    $this->init_datasets();
-    $this->init_maps();
     $task_method = 'task_' . $this->input->getCmd('task');
-    $this->task_default();
     if( method_exists( $this, $task_method ) ){
-      echo '<textarea style=width:100%;height:100%;min-height:640px;>';
+      $this->init_database();
       $this->{ $task_method }();
-      echo '</textarea>';
+    }
+    else {
+      $this->task_default();
     }
 
   }
@@ -90,20 +88,71 @@ class wbJoomigate_controller extends JControllerBase {
 
     // Title / Submenu
       JToolBarHelper::title( JText::_( 'Joomla Migration Script' ), 'generic.png' );
-      JToolBarHelper::custom( 'import_module', 'cog.png', 'cog_f2.png', 'Import Modules', false );
-      JToolBarHelper::custom( 'import_content', 'cog.png', 'cog_f2.png', 'Import Content', false );
-      JToolBarHelper::custom( 'import_menu', 'cog.png', 'cog_f2.png', 'Import Menu', false );
+      JToolBarHelper::custom( 'test_connection', 'cog.png', 'cog_f2.png', 'Test Connection', false );
+      JToolBarHelper::custom( 'import_module_v15', 'cog.png', 'cog_f2.png', 'Import Modules (v1.5)', false );
+      JToolBarHelper::custom( 'import_content_v15', 'cog.png', 'cog_f2.png', 'Import Content (v1.5)', false );
+      JToolBarHelper::custom( 'import_menu_v15', 'cog.png', 'cog_f2.png', 'Import Menu (v1.5)', false );
+      JToolBarHelper::custom( 'import_users_v25', 'cog.png', 'cog_f2.png', 'Merge Users (v2.5)', false );
+      JToolBarHelper::custom( 'import_content_v25', 'cog.png', 'cog_f2.png', 'Merge Content (v2.5)', false );
 
     // View
       ?>
-      <form id="adminForm">
-        <input type="hidden" name="option" value="com_wbjoomigate">
-        <input type="hidden" name="task" value="">
-        <div class="field text">
-          <label for="uncategorized_catid">Uncategorized Catid</label>
-          <input type="text" name="uncategorized_catid" value="2">
-        </div>
-      </form>
+      <table width=100% height=100%>
+        <tr>
+          <td width=20% valign="top" style="border-right:2px solid #ccc;padding-right: 10px;">
+            <form id=adminForm target=wbjoomigate_batch>
+              <input type="hidden" name="option" value="com_wbjoomigate">
+              <input type="hidden" name="tmpl" value="component">
+              <input type="hidden" name="rand" value="">
+              <input type="hidden" name="task" value="">
+              <div class="field text">
+                <label for="remote_joomla_version">Remote Joomla Major / Minor</label>
+                <input type="text" name="remote_joomla_version" value="<?= htmlspecialchars($this->input->get('remote_joomla_version', '1.5')) ?>">
+              </div>
+              <div class="field text">
+                <label for="remote_db_host">Remote DB Host</label>
+                <input type="text" name="remote_db_host" value="<?= htmlspecialchars($this->input->get('remote_db_host', 'localhost')) ?>">
+              </div>
+              <div class="field text">
+                <label for="remote_db_name">Remote DB Name</label>
+                <input type="text" name="remote_db_name" value="<?= htmlspecialchars($this->input->get('remote_db_name')) ?>">
+              </div>
+              <div class="field text">
+                <label for="remote_db_user">Remote DB User</label>
+                <input type="text" name="remote_db_user" value="<?= htmlspecialchars($this->input->get('remote_db_user')) ?>">
+              </div>
+              <div class="field text">
+                <label for="remote_db_pass">Remote DB Password</label>
+                <input type="text" name="remote_db_pass" value="<?= htmlspecialchars($this->input->get('remote_db_pass', null, false)) ?>">
+              </div>
+              <div class="field text">
+                <label for="remote_db_prefix">Remote DB Prefix</label>
+                <input type="text" name="remote_db_prefix" value="<?= htmlspecialchars($this->input->get('remote_db_prefix', 'jos_')) ?>">
+              </div>
+              <div class="field text">
+                <label for="uncategorized_catid">Uncategorized Catid</label>
+                <input type="text" name="uncategorized_catid" value="">
+              </div>
+            </form>
+          </td>
+          <td>
+            <iframe name=wbjoomigate_batch src=index.php?option=com_wbjoomigate&task=test_connection&tmpl=component style="width:100%;height:100%;border:none;min-height:640px;">
+            </iframe>
+          </td>
+        </tr>
+      </table>
+      <script type="text/javascript">
+        Joomla.submitbutton = function(task){
+          jQuery('#adminForm')
+            .find('input[name=task]')
+            .val(task);
+          jQuery('#adminForm')
+            .find('input[name=rand]')
+            .val(Math.random() * 1000);
+          jQuery('#adminForm')
+            .submit();
+        }
+      </script>
       <?php
 
   }
@@ -114,16 +163,24 @@ class wbJoomigate_controller extends JControllerBase {
    */
   private function init_database(){
 
-    $this->local_db = JFactory::getDBO();
+    // Local DB
+      $this->local_db = JFactory::getDBO();
 
-    $option             = array(); //prevent problems
-    $option['driver']   = 'mysqli';             // Database driver name
-    $option['host']     = 'localhost';          // Database host name
-    $option['user']     = 'webuddha_j15v3';       // User for database authentication
-    $option['password'] = '$W(#$=HFb5Wy';   // Password for database authentication
-    $option['database'] = 'webuddha_j15v3';      // Database name
-    $option['prefix']   = 'jos_';             // Database prefix (may be empty)
-    $this->remote_db = JDatabaseDriver::getInstance( $option );
+    // Remote DB
+      $option             = array();                                          // prevent problems
+      $option['driver']   = 'mysqli';                                         // Database driver name
+      $option['host']     = $this->input->get('remote_db_host', 'localhost'); // Database host name
+      $option['user']     = $this->input->get('remote_db_user', '');          // User for database authentication
+      $option['password'] = $this->input->get('remote_db_pass', '', false);   // Password for database authentication
+      $option['database'] = $this->input->get('remote_db_name', '');          // Database name
+      $option['prefix']   = $this->input->get('remote_db_prefix', 'jos_');    // Database prefix (may be empty)
+
+    // Connect
+      $this->remote_db = JDatabaseDriver::getInstance( $option );
+
+    // Return Status
+      $this->remote_db->connect();
+      return $this->remote_db->connected();
 
   }
 
@@ -132,6 +189,9 @@ class wbJoomigate_controller extends JControllerBase {
    * @return [type] [description]
    */
   private function init_datasets(){
+
+    // Params
+      $remote_version = $this->input->get('remote_joomla_version', '1.5');
 
     // Local Menu Types
       $this->data['menu_type']['local']
@@ -186,27 +246,47 @@ class wbJoomigate_controller extends JControllerBase {
           ->loadObjectList();
 
     // Remote Menu
-      $this->data['menu']['remote']
-        = $this->remote_db
-          ->setQuery("
-            SELECT `menu`.*
-              , `component`.`option` AS `component_option`
-            FROM `#__menu` AS `menu`
-            LEFT JOIN `#__components` AS `component` ON `component`.`id` = `menu`.`componentid`
-            ORDER BY `menu`.`menutype`
-              , `menu`.`sublevel`
-              , `menu`.`ordering`
-          ")
-          ->loadObjectList();
+      if( version_compare($remote_version, '2.5', '>=') ){
+        $this->data['menu']['remote']
+          = $this->remote_db
+            ->setQuery("
+              SELECT `menu`.*
+              FROM `#__menu` AS `menu`
+              ORDER BY `menu`.`menutype`
+                , `menu`.`level`
+                , `menu`.`lft`
+            ")
+            ->loadObjectList();
+      }
+      else {
+        $this->data['menu']['remote']
+          = $this->remote_db
+            ->setQuery("
+              SELECT `menu`.*
+                , `component`.`option` AS `component_option`
+              FROM `#__menu` AS `menu`
+              LEFT JOIN `#__components` AS `component` ON `component`.`id` = `menu`.`componentid`
+              ORDER BY `menu`.`menutype`
+                , `menu`.`sublevel`
+                , `menu`.`ordering`
+            ")
+            ->loadObjectList();
+      }
 
     // Remote Sections
-      $this->data['section']['remote']
-        = $this->remote_db
-          ->setQuery("
-            SELECT *
-            FROM #__sections
-          ")
-          ->loadObjectList();
+      if( version_compare($remote_version, '2.5', '>=') ){
+        $this->data['section']['remote']
+          = array();
+      }
+      else {
+        $this->data['section']['remote']
+          = $this->remote_db
+            ->setQuery("
+              SELECT *
+              FROM `#__sections`
+            ")
+            ->loadObjectList();
+      }
 
     // Local Articles
       $this->data['article']['local']
@@ -237,15 +317,27 @@ class wbJoomigate_controller extends JControllerBase {
           ->loadObjectList();
 
     // Component
-      $this->data['component']['remote']
-        = $this->remote_db
-          ->setQuery("
-            SELECT *
-            FROM `#__components`
-            WHERE `option` != ''
-              AND `parent` = 0
-            ")
-          ->loadObjectList();
+      if( version_compare($remote_version, '2.5', '>=') ){
+        $this->data['component']['remote']
+          = $this->remote_db
+            ->setQuery("
+              SELECT *
+              FROM `#__extensions`
+              WHERE `type` = 'component'
+              ")
+            ->loadObjectList();
+      }
+      else {
+        $this->data['component']['remote']
+          = $this->remote_db
+            ->setQuery("
+              SELECT *
+              FROM `#__components`
+              WHERE `option` != ''
+                AND `parent` = 0
+              ")
+            ->loadObjectList();
+      }
 
     // Module
       $this->data['module']['local_extension']
@@ -256,8 +348,6 @@ class wbJoomigate_controller extends JControllerBase {
             WHERE `type` = 'module'
             ")
           ->loadObjectList();
-
-    // Module
       $this->data['module']['local']
         = $this->local_db
           ->setQuery("
@@ -267,13 +357,32 @@ class wbJoomigate_controller extends JControllerBase {
           ->loadObjectList();
 
     // Module
-      $this->data['module']['remote']
-        = $this->remote_db
-          ->setQuery("
-            SELECT *
-            FROM `#__modules`
-            ")
-          ->loadObjectList();
+      if( version_compare($remote_version, '2.5', '>=') ){
+        $this->data['module']['remote_extension']
+          = $this->remote_db
+            ->setQuery("
+              SELECT *
+              FROM `#__extensions`
+              WHERE `type` = 'module'
+              ")
+            ->loadObjectList();
+        $this->data['module']['remote']
+          = $this->remote_db
+            ->setQuery("
+              SELECT *
+              FROM `#__modules`
+              ")
+            ->loadObjectList();
+      }
+      else {
+        $this->data['module']['remote']
+          = $this->remote_db
+            ->setQuery("
+              SELECT *
+              FROM `#__modules`
+              ")
+            ->loadObjectList();
+      }
 
     // Module Menu
       $this->data['module_menu']['local']
@@ -301,8 +410,11 @@ class wbJoomigate_controller extends JControllerBase {
    */
   private function init_maps(){
 
+    // Params
+      $remote_version = $this->input->get('remote_joomla_version', '1.5');
+
     // Defaults
-      $this->maps['category']['0'] = $this->input->getInt('uncategorized_catid', 2);
+      $this->maps['category']['0'] = $this->input->getInt('uncategorized_catid', 0);
 
     // Component
       foreach( $this->data['component']['remote'] AS $remote_component ){
@@ -343,27 +455,14 @@ class wbJoomigate_controller extends JControllerBase {
         $this->_map_remote_menu( 0, 0, $remote_menu_type );
       }
 
-    // Sections > Local Categories
-      foreach( $this->data['section']['remote'] AS $remote_content_section ){
-        foreach( $this->data['category']['local'] AS $local_content_category ){
-          if( $local_content_category->level == 1 && $local_content_category->alias == $remote_content_section->alias ){
-            $this->maps['section'][ $remote_content_section->id ] = $local_content_category->id;
-            break;
-          }
-        }
-      }
-
     // Categories
-      foreach( $this->maps['section'] AS $remote_section_id => $local_category_id ){
-        foreach( $this->data['category']['remote'] AS $remote_content_category ){
-          if(
-            !(int)$remote_content_category->parent_id
-            && $remote_content_category->section == $remote_section_id
-            ){
+      if( version_compare($remote_version, '2.5', '>=') ){
+
+        // Categories
+          foreach( $this->data['category']['remote'] AS $remote_content_category ){
             foreach( $this->data['category']['local'] AS $local_content_category ){
               if(
-                $local_content_category->level == 2
-                && $local_content_category->parent_id == $local_category_id
+                $local_content_category->parent_id == $remote_content_category->parent_id
                 && $local_content_category->alias == $remote_content_category->alias
                 ){
                 $this->maps['category'][ $remote_content_category->id ] = $local_content_category->id;
@@ -371,7 +470,41 @@ class wbJoomigate_controller extends JControllerBase {
               }
             }
           }
-        }
+
+      }
+      else {
+
+        // Sections > Local Categories
+          foreach( $this->data['section']['remote'] AS $remote_content_section ){
+            foreach( $this->data['category']['local'] AS $local_content_category ){
+              if( $local_content_category->level == 1 && $local_content_category->alias == $remote_content_section->alias ){
+                $this->maps['section'][ $remote_content_section->id ] = $local_content_category->id;
+                break;
+              }
+            }
+          }
+
+        // Categories
+          foreach( $this->maps['section'] AS $remote_section_id => $local_category_id ){
+            foreach( $this->data['category']['remote'] AS $remote_content_category ){
+              if(
+                !(int)$remote_content_category->parent_id
+                && $remote_content_category->section == $remote_section_id
+                ){
+                foreach( $this->data['category']['local'] AS $local_content_category ){
+                  if(
+                    $local_content_category->level == 2
+                    && $local_content_category->parent_id == $local_category_id
+                    && $local_content_category->alias == $remote_content_category->alias
+                    ){
+                    $this->maps['category'][ $remote_content_category->id ] = $local_content_category->id;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
       }
 
     // Articles
@@ -430,10 +563,106 @@ class wbJoomigate_controller extends JControllerBase {
   }
 
   /**
-   * [task_import_menu description]
+   * [task_test_connection description]
    * @return [type] [description]
    */
-  private function task_import_module(){
+  private function task_test_connection(){
+
+    // Remote Database Status
+      if( $this->remote_db->connected() ){
+        JError::raiseNotice( 100, 'Database Connected' );
+      }
+      else {
+        JError::raiseError( 400, 'Database NOT Connected' );
+        $this->inspect( $this->remote_db );
+      }
+
+  }
+
+
+  /**
+   * [task_import_users_v25 description]
+   * @return [type] [description]
+   */
+  private function task_import_users_v25(){
+
+    // Params
+      if( version_compare( $this->input->get('remote_joomla_version', '1.5'), '2.5', '<') ){
+        JError::raiseError( 400, 'Invalid Version' );
+        return;
+      }
+
+    // Read Remote
+      $batchCount = $this->input->getInt('batchCount', 0);
+      $batchLimit = $this->input->getInt('batchLimit', 100);
+      $rows = $this->local_db
+        ->setQuery("
+          SELECT *
+          FROM `#__users`
+          ORDER BY `id`
+          LIMIT {$batchCount}, {$batchLimit}
+          ")
+        ->loadObjectList();
+      while( count($rows) ){
+        $remote_row = array_shift( $rows );
+        $local_user = new JTableUser( $this->local_db );
+        $local_user->load( $remote_row->id );
+        $local_user->bind( (array)$remote_user );
+        inspect( $local_user );
+        die('123');
+      }
+
+  }
+
+  /**
+   * [task_import_content_v25 description]
+   * @return [type] [description]
+   */
+  private function task_import_content_v25(){
+
+    // Params
+      if( version_compare( $this->input->get('remote_joomla_version', '1.5'), '2.5', '<') ){
+        JError::raiseError( 400, 'Invalid Version' );
+        return;
+      }
+
+    // Read Remote
+      $batchCount = $this->input->getInt('batchCount', 0);
+      $batchLimit = $this->input->getInt('batchLimit', 100);
+      $rows = $this->local_db
+        ->setQuery("
+          SELECT *
+          FROM `#__users`
+          ORDER BY `id`
+          LIMIT {$batchCount}, {$batchLimit}
+          ")
+        ->loadObjectList();
+      while( count($rows) ){
+        $remote_row = array_shift( $rows );
+        $local_user = new JTableUser( $this->local_db );
+        $local_user->load( $remote_row->id );
+        $local_user->bind( (array)$remote_user );
+        inspect( $local_user );
+        die('123');
+      }
+
+  }
+
+  /**
+   * [task_import_module_v15 description]
+   * @return [type] [description]
+   */
+  private function task_import_module_v15(){
+
+    // Params
+      if( version_compare( $this->input->get('remote_joomla_version', '1.5'), '1.5', '>') ){
+        JError::raiseError( 400, 'Invalid Version' );
+        return;
+      }
+
+    // Setup
+      $this->init_datasets();
+      $this->init_maps();
 
     // Translate Modules
       foreach( $this->data['module']['remote'] AS $remote_module ){
@@ -512,10 +741,20 @@ class wbJoomigate_controller extends JControllerBase {
   }
 
   /**
-   * [task_import_menu description]
+   * [task_import_menu_v15 description]
    * @return [type] [description]
    */
-  private function task_import_menu(){
+  private function task_import_menu_v15(){
+
+    // Params
+      if( version_compare( $this->input->get('remote_joomla_version', '1.5'), '1.5', '>') ){
+        JError::raiseError( 400, 'Invalid Version' );
+        return;
+      }
+
+    // Setup
+      $this->init_datasets();
+      $this->init_maps();
 
     // Translate Menu Types
       foreach( $this->data['menu_type']['remote'] AS $remote_menu_type ){
@@ -640,10 +879,20 @@ class wbJoomigate_controller extends JControllerBase {
   }
 
   /**
-   * [task_import_content description]
+   * [task_import_content_v15 description]
    * @return [type] [description]
    */
-  private function task_import_content(){
+  private function task_import_content_v15(){
+
+    // Params
+      if( version_compare( $this->input->get('remote_joomla_version', '1.5'), '1.5', '>') ){
+        JError::raiseError( 400, 'Invalid Version' );
+        return;
+      }
+
+    // Setup
+      $this->init_datasets();
+      $this->init_maps();
 
     // Port Remote Sections to Local Categories
       foreach( $this->data['section']['remote'] AS $remote_content_section ){
