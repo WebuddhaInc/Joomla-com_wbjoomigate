@@ -1,5 +1,10 @@
 <?php
 
-require_once('controller.php');
+// Load
+  require_once('controller.php');
+  require_once('helper.php');
 
-(new wbJoomigate_controller())->execute();
+// Execute
+  (new wbJoomigate_controller())->execute(
+    JFactory::getApplication()->input->getCmd('task')
+    );
